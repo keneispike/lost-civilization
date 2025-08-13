@@ -4,7 +4,7 @@ Interactive text adventure game exploring Earth's lost civilization
 
 A text-based adventure game exploring the mystery of Earth's vanished civilization (1965-2020).
 
-🎮 **[Play the Game](https://yourusername.github.io/lost-civilization-game)**
+🎮 **[Play the Game](https://keneispike.github.io/lost-civilization)**
 
 ## How to Play
 - Type commands like "go north", "take item", "use object"
