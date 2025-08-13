@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Lost Civilization Explorer</title>
+    <style>
+        body {
+            background-color: #000;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            margin: 0;
+            padding: 20px;
+            line-height: 1.4;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #00ff00;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .game-output {
+            min-height: 400px;
+            border: 1px solid #00ff00;
+            padding: 15px;
+            margin-bottom: 10px;
+            overflow-y: auto;
+            background-color: #001100;
+        }
+        
+        .input-section {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .command-input {
+            flex: 1;
+            background-color: #002200;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        
+        .submit-btn {
+            background-color: #004400;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 8px 20px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .submit-btn:hover {
+            background-color: #006600;
+        }
+        
+        .inventory {
+            margin-top: 10px;
+            padding: 10px;
+            border: 1px solid #00ff00;
+            background-color: #001100;
+        }
+        
+        .location-info {
+            color: #ffff00;
+            font-weight: bold;
+        }
+        
+        .item {
+            color: #ff6600;
+        }
+        
+        .npc {
+            color: #ff00ff;
+        }
+        
+        .error {
+            color: #ff0000;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>LOST CIVILIZATION EXPLORER</h1>
+            <p>A Text Adventure in the Style of Zork</p>
+            <p>Year 2157 - Exploring the Mystery of Earth's Vanished Civilization (1965-2020)</p>
+        </div>
+        
+        <div id="gameOutput" class="game-output"></div>
+        
+        <div class="input-section">
+            <input type="text" id="commandInput" class="command-input" placeholder="Enter command (e.g., 'look around', 'go north', 'pick up item')" autocomplete="off">
+            <button onclick="processCommand()" class="submit-btn">EXECUTE</button>
+        </div>
+        
+        <div id="inventory" class="inventory">
+            <strong>INVENTORY:</strong> Magic Sack (empty), Scanner Device, Exploration Suit
+        </div>
+    </div>
+
+    <script>
+        // Game state
+        let gameState = {
+            currentLocation: 'city_entrance',
+            inventory: ['Magic Sack', 'Scanner Device', 'Exploration Suit'],
+            locationVisited: {},
+            gameFlags: {},
+            playerHealth: 100,
+            discoveredLocations: ['city_entrance']
+        };
+
+        // Game locations
+        const locations = {
+            city_entrance: {
+                name: "Abandoned City Entrance",
+                description: "You stand at the edge of a vast abandoned city. Towering skyscrapers reach toward a gray sky, their windows dark and lifeless. A rusted sign reads 'WELCOME TO NEW MANHATTAN - EST. 1965'. Your scanner detects faint energy signatures to the NORTH and EAST. To the WEST, you see the entrance to what appears to be a subway tunnel.",
+                items: ['Faded Billboard', 'Rusted Car'],
+                exits: {north: 'main_street', east: 'shopping_district', west: 'subway_entrance'},
+                npcs: []
+            },
+            main_street: {
+                name: "Main Street",
+                description: "You walk down what was once a bustling main street. Abandoned shops line both sides. A faded McDonald's golden arches sign hangs precariously above. Your scanner picks up electronic signatures from a computer store to the NORTH. The street continues EAST toward what looks like a government building. You can return SOUTH.",
+                items: ['1990s Walkman', 'Newspaper (dated July 20, 1969)'],
+                exits: {north: 'computer_store', east: 'city_hall', south: 'city_entrance'},
+                npcs: []
+            },
+            computer_store: {
+                name: "CompuTech Store",
+                description: "Inside this abandoned computer store, you see relics of the 'personal computer revolution': bulky monitors, tower PCs, and a sign advertising 'Windows 95 - The Future is Now!' Your scanner detects an active holographic projector near the back of the store.",
+                items: ['Floppy Disks (Windows 95)', 'IBM Computer Manual', 'Y2K Bug Warning Poster'],
+                exits: {south: 'main_street'},
+                npcs: ['Store Clerk Hologram'],
+                special: 'hologram_active'
+            },
+            city_hall: {
+                name: "Abandoned City Hall",
+                description: "The imposing government building stands before you, its marble columns cracked and weathered. A bronze plaque reads 'NEW MANHATTAN CITY HALL - DEDICATED 1976'. Through the broken glass doors, you can see scattered papers and overturned desks. Your scanner detects a secure basement level below with active power systems. A card reader blinks red near a reinforced door marked 'AUTHORIZED PERSONNEL ONLY'.",
+                items: ['Government Documents', 'Presidential Portrait (Clinton)', 'Voting Machine (circa 2000)'],
+                exits: {west: 'main_street', south: 'shopping_district'},
+                npcs: [],
+                special: 'secure_basement'
+            },
+            secure_basement: {
+                name: "Government Secure Basement",
+                description: "You've accessed a high-security government facility. Banks of computer terminals line the walls, displaying classified information about 'Project Millennium'. Monitors show global population data, resource depletion charts, and ominous countdowns. A large screen displays: 'EVACUATION PROTOCOL ALPHA - INITIATED 12/31/2019 23:59:00'. Emergency lighting casts eerie shadows.",
+                items: ['Classified Files', 'Backup Server', 'Emergency Broadcast System'],
+                exits: {up: 'city_hall'},
+                npcs: [],
+                special: 'story_revelation'
+            },
+            shopping_district: {
+                name: "Shopping District",
+                description: "A massive shopping mall stretches before you. The entrance displays a faded banner: 'BLACK FRIDAY 1999 - BIGGEST SALE EVER!' Inside, you can see storefronts from the late 20th century. Your scanner detects power sources deeper in the mall, and you notice a Blockbuster Video store to the EAST. You can return WEST to the city entrance.",
+                items: ['Shopping Cart', 'Beanie Baby Collection'],
+                exits: {west: 'city_entrance', east: 'blockbuster'},
+                npcs: []
+            },
+            blockbuster: {
+                name: "Blockbuster Video",
+                description: "The iconic blue and yellow Blockbuster logo greets you. Shelves of VHS tapes and DVDs line the walls. A poster advertises 'Titanic - Now Available!' and another warns about '$5 late fees'. Your scanner picks up a working computer terminal behind the counter. A VCR and DVD player sit connected to a small TV in the corner - the 'Movie Preview Station'.",
+                items: ['VHS: Star Wars (Special Edition)', 'DVD: The Matrix', 'Blockbuster Membership Card', 'Movie Preview Station'],
+                exits: {west: 'shopping_district'},
+                npcs: ['Blockbuster Employee Hologram'],
+                special: 'computer_terminal'
+            },
+            video_vault: {
+                name: "Blockbuster Secret Video Vault",
+                description: "Behind the counter lies a hidden archive room filled with rare and unusual tapes. These aren't regular movies - they're labeled as 'DOCUMENTARY ARCHIVES' and 'EVACUATION BRIEFINGS'. The room has advanced preservation equipment that shouldn't exist in a simple video store.",
+                items: ['Archive Tapes', 'Preservation Equipment', 'Hidden Safe'],
+                exits: {out: 'blockbuster'},
+                npcs: [],
+                special: 'secret_archives'
+            },
+            subway_entrance: {
+                name: "Subway Entrance",
+                description: "You descend into the abandoned subway system. Graffiti from the 1980s covers the walls. A MetroCard machine flickers with faint power. The tunnel stretches deeper into darkness, but the main passage leads back EAST to the city entrance. A turnstile blocks access to the platform - it requires a valid MetroCard.",
+                items: ['MetroCard', 'Subway Map (dated 2001)'],
+                exits: {east: 'city_entrance'},
+                npcs: []
+            },
+            subway_platform: {
+                name: "Abandoned Subway Platform",
+                description: "The underground platform stretches into darkness. Ancient tile work spells out 'NEW MANHATTAN CENTRAL'. A derelict subway car sits on the tracks, its doors partially open. Strange blue lights emanate from within the car - your scanner detects highly advanced technology that shouldn't exist in this time period.",
+                items: ['Subway Car Door Controls', 'Platform Bench', 'Emergency Phone'],
+                exits: {up: 'subway_entrance'},
+                npcs: [],
+                special: 'alien_tech'
+            },
+            mystery_car: {
+                name: "Mysterious Subway Car",
+                description: "Inside the subway car, you discover technology far beyond anything from 1965-2020. Holographic displays show star maps and alien text. A central console pulses with otherworldly energy. This appears to be some kind of evacuation or transport vessel. The truth about humanity's disappearance may lie here.",
+                items: ['Alien Console', 'Star Map Display', 'Evacuation Records'],
+                exits: {out: 'subway_platform'},
+                npcs: [],
+                special: 'final_revelation'
+            }
+        };
+
+        // NPCs and their dialogue
+        const npcs = {
+            'Store Clerk Hologram': {
+                dialogue: {
+                    greeting: "Welcome to CompuTech! I'm Jerry, and boy do we have deals for you! Did you hear? The year 2000 is coming and everyone's worried about Y2K! Want to buy a computer that's Y2K compliant?",
+                    y2k: "Y2K - the millennium bug! Everyone thinks computers will crash when the year 2000 hits because they only use two digits for years! Crazy times, friend.",
+                    internet: "The World Wide Web is the future! Soon everyone will have email addresses and websites. Mark my words - this 'internet' thing is going to be huge!",
+                    goodbye: "Don't forget to upgrade before Y2K hits! See you later!"
+                }
+            },
+            'Blockbuster Employee Hologram': {
+                dialogue: {
+                    greeting: "Welcome to Blockbuster! I'm Sarah. Looking for the latest releases? We just got The Matrix in - it's flying off the shelves! Two-day rental for $3.99!",
+                    matrix: "The Matrix is incredible! Makes you think about reality, you know? Some people think we might actually be living in a computer simulation. Wild stuff!",
+                    titanic: "Titanic was HUGE! Biggest movie ever made. That Celine Dion song was everywhere - you couldn't escape it!",
+                    late_fees: "Don't forget to return your movies on time! Late fees are how we stay in business. $5 per day - ouch!",
+                    goodbye: "Thanks for choosing Blockbuster! Be kind, rewind!"
+                }
+            }
+        };
+
+        function displayMessage(message, className = '') {
+            const output = document.getElementById('gameOutput');
+            const div = document.createElement('div');
+            div.innerHTML = message;
+            if (className) div.className = className;
+            output.appendChild(div);
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function updateInventory() {
+            const inventoryDiv = document.getElementById('inventory');
+            inventoryDiv.innerHTML = '<strong>INVENTORY:</strong> ' + gameState.inventory.join(', ');
+        }
+
+        function processCommand() {
+            const input = document.getElementById('commandInput');
+            const command = input.value.toLowerCase().trim();
+            input.value = '';
+            
+            displayMessage('> ' + command, 'user-input');
+            
+            if (!command) {
+                displayMessage("Please enter a command.", 'error');
+                return;
+            }
+            
+            parseCommand(command);
+        }
+
+        function parseCommand(command) {
+            const words = command.split(' ');
+            const verb = words[0];
+            let object = words.slice(1).join(' ');
+            
+            if (verb === 'look' && words[1] === 'at') {
+                object = words.slice(2).join(' ');
+            }
+            
+            switch (verb) {
+                case 'look':
+                    handleLook(object);
+                    break;
+                case 'go':
+                case 'move':
+                case 'walk':
+                    handleMove(object);
+                    break;
+                case 'take':
+                case 'pick':
+                case 'get':
+                    handleTake(object);
+                    break;
+                case 'use':
+                case 'activate':
+                    handleUse(object);
+                    break;
+                case 'talk':
+                case 'speak':
+                case 'ask':
+                    handleTalk(object);
+                    break;
+                case 'scan':
+                    handleScan();
+                    break;
+                case 'inventory':
+                case 'inv':
+                case 'i':
+                    displayInventory();
+                    break;
+                case 'map':
+                    displayMap();
+                    break;
+                case 'help':
+                    displayHelp();
+                    break;
+                default:
+                    displayMessage("I don't understand that command. Type 'help' for available commands.", 'error');
+            }
+        }
+
+        function handleLook(object) {
+            const location = locations[gameState.currentLocation];
+            
+            if (!object || object === 'around') {
+                displayMessage(`<span class="location-info">${location.name}</span>`, 'location-info');
+                displayMessage(location.description);
+                
+                if (location.items.length > 0) {
+                    displayMessage(`You can see: <span class="item">${location.items.join(', ')}</span>`);
+                }
+                
+                if (location.npcs.length > 0) {
+                    displayMessage(`Present: <span class="npc">${location.npcs.join(', ')}</span>`);
+                }
+                
+                const exits = Object.keys(location.exits);
+                if (exits.length > 0) {
+                    displayMessage(`Exits: ${exits.join(', ').toUpperCase()}`);
+                }
+            } else {
+                const foundInLocation = location.items.find(item => 
+                    item.toLowerCase().includes(object) || object.includes(item.toLowerCase())
+                );
+                const foundInInventory = gameState.inventory.find(item => 
+                    item.toLowerCase().includes(object) || object.includes(item.toLowerCase())
+                );
+                
+                if (foundInLocation) {
+                    describeThing(foundInLocation);
+                } else if (foundInInventory) {
+                    describeThing(foundInInventory);
+                } else {
+                    displayMessage(`You don't see any ${object} here.`, 'error');
+                }
+            }
+        }
+
+        function describeThing(thing) {
+            const descriptions = {
+                'faded billboard': "A weathered billboard advertising 'Coca-Cola Classic - The Real Thing!' from the 1980s. Below it, someone has spray-painted 'Where did everyone go?'",
+                'rusted car': "An old sedan from the 1990s, its paint faded and tires flat. The radio is still tuned to a classic rock station. The license plate reads 'Y2K-FIX'.",
+                '1990s walkman': "A Sony Walkman with foam headphones. The tape inside is labeled 'Greatest Hits of the 90s' and appears to contain songs by Nirvana, Pearl Jam, and Alanis Morissette. Try using it to listen!",
+                'newspaper (dated july 20, 1969)': "The headline reads: 'MAN WALKS ON MOON - Neil Armstrong Takes Giant Leap for Mankind'. The paper is remarkably preserved. A smaller headline reads 'Woodstock Festival Planned for August'.",
+                'floppy disks (windows 95)': "A stack of 3.5-inch floppy disks labeled 'Windows 95 Installation - Disk 1 of 13'. The box art shows the famous Start button and claims 'The computer for the rest of us'. These might work on an old computer!",
+                'ibm computer manual': "A thick manual titled 'IBM Personal Computer - DOS 6.0 User's Guide'. It's filled with command-line instructions and troubleshooting tips. Someone has bookmarked the section on 'Freeing Up Hard Drive Space'.",
+                'y2k bug warning poster': "A bright yellow poster warning: 'Y2K COMPLIANCE REQUIRED! Upgrade your systems before January 1, 2000 or face potential system failures!' At the bottom, someone has handwritten: 'Spoiler: we survived'.",
+                'vhs: star wars (special edition)': "The 1997 Special Edition release of Star Wars. The box art promises 'digitally enhanced' scenes and 'never-before-seen footage'. A sticker reads 'Be Kind, Please Rewind'. This could be played on a VCR.",
+                'dvd: the matrix': "The DVD case for The Matrix (1999). The back cover asks 'What is The Matrix?' and promises 'mind-bending special effects'. Someone has written 'Red pill or blue pill?' on the case. This could be played on a DVD player.",
+                'blockbuster membership card': "A membership card for Jennifer Smith, member since 1995. Her late fees total $47.50. The card shows wear from frequent use and has a 'Blockbuster Rewards' sticker. This might unlock special features at Blockbuster.",
+                'shopping cart': "A standard shopping cart with a wobbly wheel. In the child seat area, there's a forgotten shopping list that reads: 'Y2K supplies: water, batteries, canned food, flashlights'.",
+                'beanie baby collection': "A display case containing various Beanie Babies from the late 1990s, including Princess the Bear (purple), Peanut the Elephant (royal blue), and several others. A price tag shows '$500 - RARE COLLECTION!'",
+                'metrocard': "A New York City MetroCard with $3.47 remaining. The expiration date shows December 31, 2019. The back has a phone number for '24-Hour Service Information'. This could be used at subway turnstiles.",
+                'subway map (dated 2001)': "A fold-out subway map of New York City from 2001. Several new routes are marked in red ink with notes like 'Emergency evacuation route - post 9/11'. The map shows extensive security updates. Try using it to study the routes!",
+                'government documents': "A stack of official papers scattered on the floor. You can make out fragments: 'Census 2000', 'Budget Appropriations FY 1999', and 'Emergency Preparedness Protocol - Y2K Contingency Plan'. These look important - try using them to read thoroughly.",
+                'presidential portrait (clinton)': "A formal portrait of President Bill Clinton hanging askew on the wall. Someone has drawn a speech bubble that says 'I did not have relations with that Y2K bug'.",
+                'voting machine (circa 2000)': "A punch-card voting machine from the controversial 2000 election. The instructions are still visible: 'Punch holes completely through'. A sticky note reads 'Check for hanging chads!' This machine might still be operational.",
+                'id badge': "An official government ID badge for Dr. Sarah Chen with 'AUTHORIZED PERSONNEL' clearance. It has a magnetic stripe that might work with card readers.",
+                'scanner device': "Your advanced scanning device can detect energy signatures, electronic systems, and analyze artifacts from the lost civilization. The display shows various readouts including radiation levels, electromagnetic fields, and temporal anomalies.",
+                'magic sack': "A miraculous carrying device that can hold unlimited items without weight or bulk restrictions. The material seems to shimmer and bend space itself.",
+                'exploration suit': "Your protective exploration suit provides environmental protection and life support. Built-in displays show air quality, radiation levels, and vital signs. Try using it to activate advanced features!",
+                'classified files': "Top secret government files revealing the truth about 'Project Millennium' and humanity's planned evacuation from Earth.",
+                'backup server': "A massive computer server containing backups of human civilization - cultural records, DNA samples, and terraforming data.",
+                'emergency broadcast system': "The system used to coordinate the global evacuation. Still functional and monitoring for return signals.",
+                'alien console': "An advanced alien interface with holographic displays showing star maps and evacuation records. This might be the key to understanding what happened.",
+                'evacuation records': "Detailed logs of humanity's departure from Earth, including passenger manifests and destination coordinates."
+            };
+            
+            const description = descriptions[thing.toLowerCase()];
+            if (description) {
+                displayMessage(description);
+            } else {
+                displayMessage(`You examine the ${thing}. Nothing particularly noteworthy.`);
+            }
+        }
+
+        function handleMove(direction) {
+            const location = locations[gameState.currentLocation];
+            
+            if (location.exits[direction]) {
+                gameState.currentLocation = location.exits[direction];
+                
+                if (!gameState.discoveredLocations.includes(gameState.currentLocation)) {
+                    gameState.discoveredLocations.push(gameState.currentLocation);
+                }
+                
+                displayMessage(`You go ${direction}.`);
+                handleLook('around');
+            } else {
+                displayMessage(`You can't go ${direction} from here.`, 'error');
+            }
+        }
+
+        function handleTake(object) {
+            const location = locations[gameState.currentLocation];
+            const itemIndex = location.items.findIndex(item => 
+                item.toLowerCase().includes(object) || object.includes(item.toLowerCase())
+            );
+            
+            if (itemIndex !== -1) {
+                const item = location.items[itemIndex];
+                gameState.inventory.push(item);
+                location.items.splice(itemIndex, 1);
+                displayMessage(`You take the ${item} and put it in your magic sack.`);
+                updateInventory();
+            } else {
+                displayMessage(`You don't see any ${object} here to take.`, 'error');
+            }
+        }
+
+        function handleUse(object) {
+            if (object.includes('scanner') || object.includes('scan')) {
+                handleScan();
+            } else if (object.includes('computer') || object.includes('terminal')) {
+                useComputer();
+            } else if (object.includes('walkman')) {
+                useWalkman();
+            } else if (object.includes('metrocard') || object.includes('metro card')) {
+                useMetroCard();
+            } else if (object.includes('government documents') || object.includes('documents')) {
+                useGovernmentDocuments();
+            } else if (object.includes('voting machine')) {
+                useVotingMachine();
+            } else if (object.includes('membership card') || object.includes('blockbuster card')) {
+                useBlockbusterCard();
+            } else if (object.includes('vhs') || object.includes('star wars')) {
+                useVHS();
+            } else if (object.includes('dvd') || object.includes('matrix')) {
+                useDVD();
+            } else if (object.includes('floppy') || object.includes('windows 95')) {
+                useFloppyDisks();
+            } else if (object.includes('subway map')) {
+                useSubwayMap();
+            } else if (object.includes('car door') || object.includes('door controls')) {
+                useCarDoorControls();
+            } else if (object.includes('alien console') || object.includes('console')) {
+                useAlienConsole();
+            } else if (object.includes('exploration suit') || object.includes('suit')) {
+                useExplorationSuit();
+            } else {
+                displayMessage(`You can't use the ${object} right now.`, 'error');
+            }
+        }
+
+        function useWalkman() {
+            if (gameState.inventory.some(item => item.includes('1990s Walkman'))) {
+                displayMessage("You put on the headphones and press play...");
+                displayMessage("♪ 'Come as you are, as you were, as I want you to be...' ♪");
+                displayMessage("The Nirvana song plays, but suddenly you hear static and a voice:");
+                displayMessage("'...Emergency broadcast... if anyone can hear this... evacuation ships departing from Central Station... coordinates 40.7831° N, 73.9712° W...'");
+                displayMessage("The message cuts out. Those coordinates might be important!");
+                gameState.gameFlags.heardBroadcast = true;
+            } else {
+                displayMessage("You need to have the Walkman in your inventory to use it.", 'error');
+            }
+        }
+
+        function useMetroCard() {
+            if (!gameState.inventory.some(item => item.includes('MetroCard'))) {
+                displayMessage("You need to have a MetroCard to use the subway system.", 'error');
+                return;
+            }
+            
+            if (gameState.currentLocation === 'subway_entrance') {
+                displayMessage("You swipe the MetroCard through the turnstile reader...");
+                displayMessage("*BEEP* - Card accepted! The turnstile unlocks with a mechanical click.");
+                displayMessage("You can now access the subway platform!");
+                
+                locations.subway_entrance.exits.down = 'subway_platform';
+                locations.subway_entrance.description = locations.subway_entrance.description.replace(
+                    "A turnstile blocks access to the platform - it requires a valid MetroCard.",
+                    "The turnstile is now unlocked, allowing access DOWN to the platform."
+                );
+                displayMessage("New exit available: DOWN to subway platform");
+            } else {
+                displayMessage("You need to be at a subway station to use the MetroCard.", 'error');
+            }
+        }
+
+        function useGovernmentDocuments() {
+            if (!gameState.inventory.some(item => item.includes('Government Documents'))) {
+                displayMessage("You need to have the Government Documents to read them.", 'error');
+                return;
+            }
+            
+            displayMessage("You examine the classified documents carefully...");
+            displayMessage("CLASSIFIED - EYES ONLY");
+            displayMessage("Project Millennium - Final Phase Report");
+            displayMessage("Population relocation proceeding on schedule...");
+            displayMessage("All citizens to report to designated evacuation points by 23:59:59, Dec 31, 2019");
+            displayMessage("Transport vessels standing by at coordinates: 40.7831° N, 73.9712° W");
+            displayMessage("");
+            displayMessage("At the bottom, a handwritten note: 'Emergency access code for basement: 2000'");
+            gameState.gameFlags.knownAccessCode = true;
+            
+            if (gameState.currentLocation === 'city_hall' && !gameState.gameFlags.basementUnlocked) {
+                displayMessage("");
+                displayMessage("You notice a keypad next to the reinforced basement door...");
+                displayMessage("You could try entering the access code 2000...");
+                locations.city_hall.exits.down = 'secure_basement';
+                gameState.gameFlags.basementUnlocked = true;
+                displayMessage("New exit available: DOWN to secure basement");
+            }
+        }
+
+        function useVotingMachine() {
+            if (gameState.currentLocation === 'city_hall') {
+                displayMessage("You approach the punch-card voting machine...");
+                displayMessage("The ballot shows: 'EMERGENCY REFERENDUM - DECEMBER 2019'");
+                displayMessage("Question: 'Do you consent to planetary evacuation procedures?'");
+                displayMessage("Results: YES: 98.7%  NO: 1.3%");
+                displayMessage("");
+                displayMessage("A hidden compartment opens, revealing an ID badge: 'AUTHORIZED PERSONNEL - DR. SARAH CHEN'");
+                
+                if (!gameState.inventory.includes('ID Badge')) {
+                    gameState.inventory.push('ID Badge');
+                    displayMessage("You take the ID badge.");
+                    updateInventory();
+                }
+            } else {
+                displayMessage("You need to be near a voting machine to use it.", 'error');
+            }
+        }
+
+        function useBlockbusterCard() {
+            if (!gameState.inventory.some(item => item.includes('Blockbuster Membership Card'))) {
+                displayMessage("You need to have a Blockbuster membership card.", 'error');
+                return;
+            }
+            
+            if (gameState.currentLocation === 'blockbuster') {
+                displayMessage("You scan the membership card at the counter terminal...");
+                displayMessage("*BEEP* Welcome back, Jennifer Smith!");
+                displayMessage("Account Status: OVERDUE - $47.50 in late fees");
+                displayMessage("Last rental: The Matrix - Due: Jan 1, 2020");
+                displayMessage("");
+                displayMessage("SPECIAL ACCESS GRANTED - VIP Customer since 1995");
+                displayMessage("You hear a mechanical whir as a secret panel opens behind the counter!");
+                
+                if (!gameState.gameFlags.blockbusterSecretOpen) {
+                    locations.blockbuster.exits.secret = 'video_vault';
+                    locations.blockbuster.description += " A secret panel has opened behind the counter, revealing a hidden area.";
+                    gameState.gameFlags.blockbusterSecretOpen = true;
+                    displayMessage("New exit available: SECRET passage behind counter");
+                }
+            } else {
+                displayMessage("You need to be at Blockbuster to use the membership card.", 'error');
+            }
+        }
+
+        function useVHS() {
+            if (!gameState.inventory.some(item => item.includes('VHS'))) {
+                displayMessage("You need to have a VHS tape to play.", 'error');
+                return;
+            }
+            
+            if (gameState.currentLocation === 'blockbuster') {
+                displayMessage("You insert the Star Wars VHS into the Movie Preview Station...");
+                displayMessage("The screen flickers to life showing the opening crawl...");
+                displayMessage("But suddenly the image distorts and shows what looks like documentary footage:");
+                displayMessage("'...the discovery of advanced technology beneath major cities worldwide...'");
+                displayMessage("'...first contact protocols initiated December 25, 2019...'");
+                displayMessage("'...voluntary evacuation to preserve human civilization...'");
+                displayMessage("The tape ends abruptly. This wasn't the original Star Wars!");
+            } else {
+                displayMessage("You need to be at a place with a VCR to play VHS tapes.", 'error');
+            }
+        }
+
+        function useDVD() {
+            if (!gameState.inventory.some(item => item.includes('DVD'))) {
+                displayMessage("You need to have a DVD to play.", 'error');
+                return;
+            }
+            
+            if (gameState.currentLocation === 'blockbuster') {
+                displayMessage("You insert The Matrix DVD into the Movie Preview Station...");
+                displayMessage("The screen shows the famous red pill/blue pill scene...");
+                displayMessage("But Neo's reflection in Morpheus's glasses shows something different:");
+                displayMessage("Images of evacuation ships, star maps, and what appears to be a new world...");
+                displayMessage("A hidden message appears: 'The choice was already made. We chose the blue pill... together.'");
+            } else {
+                displayMessage("You need to be at a place with a DVD player to play DVDs.", 'error');
+            }
+        }
+
+        function useFloppyDisks() {
+            if (!gameState.inventory.some(item => item.includes('Floppy Disks'))) {
+                displayMessage("You need to have floppy disks to use.", 'error');
+                return;
+            }
+            
+            if (gameState.currentLocation === 'computer_store') {
+                displayMessage("You insert the Windows 95 installation disk into an old computer...");
+                displayMessage("The system boots up, but instead of Windows 95, you see:");
+                displayMessage("EMERGENCY ARCHIVE SYSTEM - INITIALIZED");
+                displayMessage("Loading human civilization backup...");
+                displayMessage("Cultural records: 98% complete");
+                displayMessage("DNA samples: 100% secure");
+                displayMessage("New world terraforming: 67% complete");
+                displayMessage("Estimated return to Earth: 2157 CE");
+                displayMessage("");
+                displayMessage("Wait... that's this year! The archives predict humanity should return now!");
+            } else {
+                displayMessage("You need to be at a computer to use floppy disks.", 'error');
+            }
+        }
+
+        function useSubwayMap() {
+            if (!gameState.inventory.some(item => item.includes('Subway Map'))) {
+                displayMessage("You need to have the subway map to read it.", 'error');
+                return;
+            }
+            
+            displayMessage("You unfold the 2001 subway map...");
+            displayMessage("Most routes are marked normally, but one line is highlighted in red:");
+            displayMessage("'SPECIAL SERVICE - Central Station to Evacuation Point Alpha'");
+            displayMessage("The map shows this line extends deep underground, far beyond normal subway tunnels.");
+            displayMessage("Coordinates are marked: 40.7831° N, 73.9712° W");
+            displayMessage("This matches the coordinates from the radio broadcast and government documents!");
+        }
+
+        function useCarDoorControls() {
+            if (gameState.currentLocation === 'subway_platform') {
+                displayMessage("You examine the subway car door controls...");
+                displayMessage("The panel is labeled: 'EVACUATION TRANSPORT - AUTHORIZED PERSONNEL ONLY'");
+                
+                if (gameState.inventory.some(item => item.includes('ID Badge'))) {
+                    displayMessage("You swipe the ID badge you found...");
+                    displayMessage("*ACCESS GRANTED* - Welcome, Dr. Sarah Chen");
+                    displayMessage("The subway car doors hiss open, revealing advanced technology inside!");
+                    
+                    if (!locations.subway_platform.exits.into) {
+                        locations.subway_platform.exits.into = 'mystery_car';
+                        displayMessage("New exit available: INTO the mysterious subway car");
+                    }
+                } else {
+                    displayMessage("The panel flashes red: 'AUTHORIZED PERSONNEL REQUIRED'");
+                    displayMessage("You need some kind of ID badge or access card.");
+                }
+            } else {
+                displayMessage("There are no subway car door controls here.", 'error');
+            }
+        }
+
+        function useAlienConsole() {
+            if (gameState.currentLocation === 'mystery_car') {
+                displayMessage("You approach the alien console cautiously...");
+                displayMessage("The holographic interface responds to your presence:");
+                displayMessage("");
+                displayMessage("EVACUATION LOG - FINAL ENTRY");
+                displayMessage("Species: Human (Homo sapiens)");
+                displayMessage("Population transported: 7.8 billion");
+                displayMessage("Destination: Kepler-442b (New Eden)");
+                displayMessage("Departure: January 1, 2020 00:00:01");
+                displayMessage("Reason: Imminent solar flare event - ETA: 2020.01.15");
+                displayMessage("");
+                displayMessage("STATUS: Transport successful. Human civilization preserved.");
+                displayMessage("Automated return protocol: Activated for 2157 CE");
+                displayMessage("Welcome home, Explorer. Your mission is complete.");
+                displayMessage("");
+                displayMessage("🎉 CONGRATULATIONS! You've uncovered the truth about humanity's disappearance!");
+                gameState.gameFlags.gameCompleted = true;
+            } else {
+                displayMessage("There's no alien console here to use.", 'error');
+            }
+        }
+
+        function useExplorationSuit() {
+            displayMessage("You activate your exploration suit's advanced features...");
+            displayMessage("🔦 Night vision: ENABLED");
+            displayMessage("☢️ Radiation shielding: ACTIVE");
+            displayMessage("🌡️ Climate control: OPTIMAL");
+            displayMessage("📡 Long-range scanner: BOOSTED");
+            
+            if (!gameState.gameFlags.suitBoosted) {
+                displayMessage("Your suit's enhanced sensors reveal hidden details in each location!");
+                gameState.gameFlags.suitBoosted = true;
+            }
+        }
+
+        function handleScan() {
+            displayMessage("Your scanner hums to life, analyzing the area...");
+            
+            const scanResults = {
+                city_entrance: "Scanner detects: Faint electromagnetic signatures from the north and east. Residual radiation suggests the area was abandoned around 2020. No life signs.",
+                main_street: "Scanner shows: High concentration of 20th-century consumer electronics to the north. Government-level security systems detected to the east.",
+                computer_store: "Scanner indicates: Active holographic projector detected! Energy signature suggests advanced AI preservation system. Caution advised.",
+                city_hall: "Scanner reveals: Secure underground bunker detected beneath building. Active power grid and environmental systems still operational. Classified materials present.",
+                secure_basement: "Scanner overloads with readings: Massive data storage, quantum encryption, and what appears to be... alien technology signatures mixed with human tech.",
+                shopping_district: "Scanner shows: Standard 1990s retail electronics. Unusual energy spike detected from the east - recommend investigation.",
+                blockbuster: "Scanner reveals: Functional computer terminal with network access. Database appears to contain entertainment records from 1985-2010. Hidden room detected behind counter.",
+                video_vault: "Scanner goes wild: Advanced preservation technology, quantum storage devices, and encrypted data streams. This is far beyond 1990s capability.",
+                subway_entrance: "Scanner detects: Underground power grid still partially functional. Massive facility detected deeper underground - origin unknown.",
+                subway_platform: "Scanner alerts: UNKNOWN TECHNOLOGY DETECTED. Energy signatures do not match any known human technology from 1965-2020 period.",
+                mystery_car: "Scanner overloads: Technology beyond current understanding. Quantum signatures, dimensional distortions, and what can only be described as 'non-terrestrial' energy patterns."
+            };
+            
+            displayMessage(scanResults[gameState.currentLocation] || "Scanner detects nothing unusual in this area.");
+        }
+
+        function handleTalk(object) {
+            const location = locations[gameState.currentLocation];
+            
+            if (location.npcs.length === 0) {
+                displayMessage("There's no one here to talk to.", 'error');
+                return;
+            }
+            
+            if (object.includes('about ')) {
+                const topic = object.split('about ')[1];
+                askNPCAbout(location.npcs[0], topic);
+                return;
+            }
+            
+            if (object.includes('clerk') || object.includes('jerry')) {
+                talkToNPC('Store Clerk Hologram');
+            } else if (object.includes('employee') || object.includes('sarah')) {
+                talkToNPC('Blockbuster Employee Hologram');
+            } else {
+                displayMessage(`You try to get the attention of ${location.npcs[0]}.`);
+                talkToNPC(location.npcs[0]);
+            }
+        }
+
+        function talkToNPC(npcName) {
+            const npc = npcs[npcName];
+            if (!npc) return;
+            
+            displayMessage(`<span class="npc">[${npcName}]:</span> ${npc.dialogue.greeting}`, 'npc');
+            displayMessage("You can ask about: 'y2k', 'internet', 'matrix', 'titanic', or say 'goodbye'");
+        }
+
+        function askNPCAbout(npcName, topic) {
+            const npc = npcs[npcName];
+            if (!npc) {
+                displayMessage("There's no one here to talk to.", 'error');
+                return;
+            }
+            
+            const cleanTopic = topic.toLowerCase().trim();
+            
+            if (npc.dialogue[cleanTopic]) {
+                displayMessage(`<span class="npc">[${npcName}]:</span> ${npc.dialogue[cleanTopic]}`, 'npc');
+            } else {
+                displayMessage(`<span class="npc">[${npcName}]:</span> I don't know much about ${topic}. You can ask me about other things though!`, 'npc');
+                displayMessage("Available topics: " + Object.keys(npc.dialogue).filter(key => key !== 'greeting').join(', '));
+            }
+        }
+
+        function useComputer() {
+            if (gameState.currentLocation === 'blockbuster') {
+                displayMessage("You access the Blockbuster computer terminal...");
+                displayMessage("BLOCKBUSTER ENTERTAINMENT DATABASE");
+                displayMessage("Last updated: December 31, 2010");
+                displayMessage("Total movies rented in 2010: 1,967,234");
+                displayMessage("Most popular rental: Avatar (2009)");
+                displayMessage("ERROR: Network connection lost on January 1, 2020...");
+            } else {
+                displayMessage("There's no computer to use here.", 'error');
+            }
+        }
+
+        function displayInventory() {
+            displayMessage("You look into your magic sack:");
+            gameState.inventory.forEach(item => {
+                displayMessage(`- ${item}`, 'item');
+            });
+        }
+
+        function displayMap() {
+            displayMessage("╔═══════════════════════════════════════════════════════════════════════╗");
+            displayMessage("║                    🗺️  EXPLORATION MAP - NEW MANHATTAN                ║");
+            displayMessage("╚═══════════════════════════════════════════════════════════════════════╝");
+            displayMessage("");
+            
+            const mapLayout = {
+                'computer_store': {x: 2, y: 0, symbol: '🖥️CS', name: 'CompuTech Store', ascii: '┌─CS─┐'},
+                'secure_basement': {x: 4, y: 1, symbol: '🔒SB', name: 'Secure Basement', ascii: '[SB]'},
+                'main_street': {x: 2, y: 2, symbol: '🏪MS', name: 'Main Street', ascii: '├─MS─┤'},
+                'city_hall': {x: 4, y: 2, symbol: '🏛️CH', name: 'City Hall', ascii: '[CH]'},
+                'city_entrance': {x: 2, y: 4, symbol: '🚪CE', name: 'City Entrance', ascii: '╋─CE─╋'},
+                'shopping_district': {x: 4, y: 4, symbol: '🛍️SD', name: 'Shopping District', ascii: '[SD]'},
+                'subway_entrance': {x: 0, y: 4, symbol: '🚇SE', name: 'Subway Entrance', ascii: '[SE]'},
+                'blockbuster': {x: 6, y: 4, symbol: '📼BB', name: 'Blockbuster Video', ascii: '[BB]'},
+                'video_vault': {x: 6, y: 2, symbol: '🎞️VV', name: 'Video Vault', ascii: '[VV]'},
+                'subway_platform': {x: 0, y: 6, symbol: '🚉SP', name: 'Subway Platform', ascii: '[SP]'},
+                'mystery_car': {x: 0, y: 8, symbol: '🛸MC', name: 'Mystery Car', ascii: '[MC]'}
+            };
+            
+            // Create a larger grid for better spacing
+            const gridHeight = 9;
+            const gridWidth = 7;
+            const grid = Array(gridHeight).fill().map(() => Array(gridWidth).fill('     '));
+            const connections = Array(gridHeight).fill().map(() => Array(gridWidth).fill('     '));
+            
+            // Place discovered locations
+            gameState.discoveredLocations.forEach(locationId => {
+                const loc = mapLayout[locationId];
+                if (loc && loc.y < gridHeight && loc.x < gridWidth) {
+                    let symbol = loc.ascii;
+                    
+                    // Mark current location with asterisk
+                    if (locationId === gameState.currentLocation) {
+                        symbol = symbol.replace('[', '*[').replace('┌', '*┌').replace('├', '*├').replace('╋', '*╋');
+                    }
+                    
+                    grid[loc.y][loc.x] = symbol;
+                }
+            });
+            
+            // Add connection lines between discovered locations
+            if (gameState.discoveredLocations.includes('city_entrance')) {
+                // Vertical connections
+                if (gameState.discoveredLocations.includes('main_street')) {
+                    grid[1][2] = '  │  ';
+                    grid[3][2] = '  │  ';
+                }
+                if (gameState.discoveredLocations.includes('subway_entrance')) {
+                    grid[4][1] = '──── ';
+                }
+                if (gameState.discoveredLocations.includes('shopping_district')) {
+                    grid[4][3] = ' ────';
+                }
+            }
+            
+            // Computer Store to Main Street
+            if (gameState.discoveredLocations.includes('computer_store') && gameState.discoveredLocations.includes('main_street')) {
+                grid[1][2] = '  │  ';
+            }
+            
+            // Main Street to City Hall
+            if (gameState.discoveredLocations.includes('main_street') && gameState.discoveredLocations.includes('city_hall')) {
+                grid[2][3] = ' ────';
+            }
+            
+            // City Hall to Secure Basement
+            if (gameState.discoveredLocations.includes('city_hall') && gameState.discoveredLocations.includes('secure_basement')) {
+                grid[1][4] = '  ↑  ';
+            }
+            
+            // Shopping District to Blockbuster
+            if (gameState.discoveredLocations.includes('shopping_district') && gameState.discoveredLocations.includes('blockbuster')) {
+                grid[4][5] = ' ────';
+            }
+            
+            // Blockbuster to Video Vault
+            if (gameState.discoveredLocations.includes('blockbuster') && gameState.discoveredLocations.includes('video_vault')) {
+                grid[3][6] = '  ↑  ';
+            }
+            
+            // Subway connections
+            if (gameState.discoveredLocations.includes('subway_entrance') && gameState.discoveredLocations.includes('subway_platform')) {
+                grid[5][0] = '  ↓  ';
+            }
+            
+            if (gameState.discoveredLocations.includes('subway_platform') && gameState.discoveredLocations.includes('mystery_car')) {
+                grid[7][0] = '  ↓  ';
+            }
+            
+            // Display the grid with frame
+            displayMessage("    ┌───────────────────────────────────────────┐");
+            grid.forEach((row, index) => {
+                let line = "    │ " + row.join('') + " │";
+                displayMessage(line);
+            });
+            displayMessage("    └───────────────────────────────────────────┘");
+            
+            displayMessage("");
+            displayMessage("═══════════════════════════════════════════════════════════════════════");
+            displayMessage("🔍 LEGEND:");
+            displayMessage("   * = Your Current Location    │ ── ↑ ↓ = Connections");
+            displayMessage("");
+            
+            // Show discovered locations with icons and descriptions
+            const locationsByCategory = {
+                "🏙️ SURFACE AREAS": ['city_entrance', 'main_street', 'shopping_district'],
+                "🏢 BUILDINGS": ['computer_store', 'city_hall', 'blockbuster'],
+                "🔒 SECURE AREAS": ['secure_basement', 'video_vault'],
+                "🚇 UNDERGROUND": ['subway_entrance', 'subway_platform', 'mystery_car']
+            };
+            
+            Object.entries(locationsByCategory).forEach(([category, locationIds]) => {
+                const discoveredInCategory = locationIds.filter(id => gameState.discoveredLocations.includes(id));
+                if (discoveredInCategory.length > 0) {
+                    displayMessage(category);
+                    discoveredInCategory.forEach(locationId => {
+                        const loc = mapLayout[locationId];
+                        if (loc) {
+                            const current = locationId === gameState.currentLocation ? " ← YOU ARE HERE" : "";
+                            displayMessage(`   ${loc.symbol} = ${loc.name}${current}`);
+                        }
+                    });
+                    displayMessage("");
+                }
+            });
+            
+            // Progress stats
+            const totalLocations = Object.keys(locations).length;
+            const discoveredCount = gameState.discoveredLocations.length;
+            const explorationPercent = Math.round((discoveredCount / totalLocations) * 100);
+            
+            displayMessage("═══════════════════════════════════════════════════════════════════════");
+            displayMessage(`📊 EXPLORATION PROGRESS: ${discoveredCount}/${totalLocations} locations (${explorationPercent}%)`);
+            
+            // Special achievements
+            const achievements = [];
+            if (gameState.gameFlags.basementUnlocked) achievements.push("🔓 Basement Access");
+            if (gameState.gameFlags.blockbusterSecretOpen) achievements.push("🎬 Secret Vault");
+            if (gameState.gameFlags.heardBroadcast) achievements.push("📻 Emergency Broadcast");
+            if (gameState.gameFlags.gameCompleted) achievements.push("🏆 MISSION COMPLETE");
+            
+            if (achievements.length > 0) {
+                displayMessage(`🏅 ACHIEVEMENTS: ${achievements.join(' | ')}`);
+            }
+            
+            displayMessage("═══════════════════════════════════════════════════════════════════════");
+        }
+
+        function displayHelp() {
+            displayMessage("=== AVAILABLE COMMANDS ===");
+            displayMessage("MOVEMENT: go [direction], move [direction], walk [direction]");
+            displayMessage("OBSERVATION: look, look around, look at [object]");
+            displayMessage("INTERACTION: take [object], pick up [object], use [object]");
+            displayMessage("COMMUNICATION: talk to [person], ask [person] about [topic]");
+            displayMessage("Examples: 'ask clerk about y2k', 'talk to sarah about matrix'");
+            displayMessage("TOOLS: scan, scanner (analyze current area)");
+            displayMessage("INVENTORY: inventory, inv, i");
+            displayMessage("MAP: map (show discovered areas)");
+            displayMessage("HELP: help");
+            displayMessage("");
+            displayMessage("🧩 PUZZLE HINTS:");
+            displayMessage("• Use items to unlock new areas and reveal story secrets");
+            displayMessage("• MetroCard opens subway access, ID badges unlock secure areas");
+            displayMessage("• Government documents contain access codes");
+            displayMessage("• Media items (VHS, DVD, Walkman) reveal hidden messages");
+            displayMessage("• Membership cards provide special privileges");
+            displayMessage("");
+            displayMessage("Example: 'use metrocard', 'use government documents', 'use walkman'");
+        }
+
+        function initGame() {
+            displayMessage("=== LOST CIVILIZATION EXPLORER ===");
+            displayMessage("Year 2157. You are an archaeological explorer investigating the mysterious disappearance of Earth's civilization between 1965-2020.");
+            displayMessage("Your mission: uncover clues about what happened to humanity during this pivotal period.");
+            displayMessage("Your equipment: Advanced scanner, magic carrying sack, and protective exploration suit.");
+            displayMessage("");
+            displayMessage("Type 'help' for commands, or 'look around' to begin your exploration.");
+            displayMessage("=========================================");
+            displayMessage("");
+            
+            handleLook('around');
+        }
+
+        document.getElementById('commandInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                processCommand();
+            }
+        });
+
+        initGame();
+    </script>
+</body>
+</html>
